@@ -123,7 +123,7 @@
             需要翻譯的文字：\n${inputText}`;
 
             // 🚀 終極結合：你專屬嘅 Cloudflare 中轉站 + 最新嘅 Gemini 2.5 Flash 模型！
-            const url = `https://chinese-proxy.wahchiu0903.workers.dev/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKeyInput}`;
+            const url = `https://gateway.ai.cloudflare.com/v1/8b947c20fa92a998f3de56cd5d236867/chewiness-proxy/compat/chat/completions/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKeyInput}`;
             
             const requestBody = { contents: [{ parts: [{ text: prompt }] }] };
 
