@@ -3,8 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>港保通 v4.1 - 安全記憶版</title>
+    <title>港保通 v4.2 - 最新 AI 大腦版</title>
     <script src="https://unpkg.com/pinyin-pro"></script>
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="港保通">
+    
     <style>
         body { font-family: -apple-system, sans-serif; background-color: #f0f4f8; margin: 0; padding: 0; color: #333; }
         .header { background-color: #2980b9; color: white; padding: 15px; text-align: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
@@ -36,7 +41,7 @@
 <body>
     <div class="header">
         <h1>🚀 港保通 AI 訓練台</h1>
-        <div class="version">Version: 4.1.0 | 安全記憶版</div>
+        <div class="version">Version: 4.2.0 | Gemini 2.5 大腦</div>
     </div>
 
     <div class="container">
@@ -51,7 +56,7 @@
             <h2>💬 2. 輸入廣東話推銷話術</h2>
             <textarea id="inputText" placeholder="例：呢份單供斷之後，啲錢可以滾存留俾下一代..."></textarea>
             <button class="btn btn-ai" id="translateBtn" onclick="translateWithGemini()">✨ AI 智能翻譯並生成拼音</button>
-            <div class="loading" id="loadingText">🧠 Gemini 正在思考與翻譯中，請稍候...</div>
+            <div class="loading" id="loadingText">🧠 老師正在思考與翻譯中，請稍候...</div>
         </div>
 
         <div class="card">
@@ -68,7 +73,7 @@
         const { pinyin } = pinyinPro;
         let currentTranslatedText = "";
 
-        // 頁面載入時，自動從手機讀取之前存好的 API Key
+        // 頁面載入時自動讀取 Key
         document.addEventListener("DOMContentLoaded", () => {
             const savedKey = localStorage.getItem('gemini_api_key');
             if (savedKey) {
@@ -77,6 +82,7 @@
             }
         });
 
+        // 呼叫 Gemini 2.5 Flash API
         async function translateWithGemini() {
             const apiKeyInput = document.getElementById('apiKey').value.trim();
             const inputText = document.getElementById('inputText').value.trim();
@@ -87,7 +93,6 @@
             if (!apiKeyInput) return alert("請先在上方貼上你的 Gemini API Key！");
             if (!inputText) return alert("請輸入需要翻譯的廣東話！");
 
-            // 成功獲取 Key 後，安全地儲存在手機本地
             localStorage.setItem('gemini_api_key', apiKeyInput);
             document.getElementById('savedBadge').style.display = 'block';
 
@@ -98,12 +103,13 @@
 
             const prompt = `你是一個專業的普通話保險教練。請將以下【香港粵語/口語】翻譯成【最地道、具親和力、專業的內地保險普通話書面語】。
             規則：
-            1. 替換掉所有香港專用語（如：危疾改為重疾，供斷改為交清，理賠改為理賠等）。
+            1. 替換掉所有香港專用語（如：危疾改為重疾，供斷改為交清保費，滾存改為複利增值等）。
             2. 語氣要專業得體，適合面對內地高淨值客戶。
             3. 絕對只輸出翻譯後的純文字，不要加任何解釋、引號或標點符號外的內容。
             需要翻譯的文字：\n${inputText}`;
 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKeyInput}`;
+            // 注意：這裡已經更新為你名單上的 gemini-2.5-flash
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKeyInput}`;
             const requestBody = { contents: [{ parts: [{ text: prompt }] }] };
 
             try {
@@ -113,7 +119,10 @@
                     body: JSON.stringify(requestBody)
                 });
 
-                if (!response.ok) throw new Error("API 請求失敗，請檢查 API Key 是否正確。");
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error("連線錯誤或 API Key 無效，請檢查 VPN 是否已開啟。");
+                }
 
                 const data = await response.json();
                 currentTranslatedText = data.candidates[0].content.parts[0].text.trim();
@@ -123,7 +132,7 @@
 
             } catch (error) {
                 alert("發生錯誤：" + error.message);
-                resultBox.innerHTML = "翻譯失敗，請檢查網絡或 API Key。";
+                resultBox.innerHTML = "翻譯失敗，請確保你已開啟 VPN (如日本/台灣)，並檢查 API Key 是否正確。";
             } finally {
                 loadingText.style.display = "none";
                 translateBtn.disabled = false;
@@ -131,6 +140,7 @@
             }
         }
 
+        // 語音播放
         function playTranslation() {
             if(!currentTranslatedText) return alert("請先進行翻譯！");
             const utterance = new SpeechSynthesisUtterance(currentTranslatedText);
@@ -139,6 +149,7 @@
             window.speechSynthesis.speak(utterance);
         }
 
+        // 語音糾正
         function startCorrection() {
             if (!currentTranslatedText) return alert("請先進行翻譯！");
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
