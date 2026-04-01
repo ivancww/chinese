@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>港保通 v4.1 - 安全記憶版</title>
+    <script src="https://unpkg.com/pinyin-pro"></script>
+    <style>
+        body { font-family: -apple-system, sans-serif; background-color: #f0f4f8; margin: 0; padding: 0; color: #333; }
+        .header { background-color: #2980b9; color: white; padding: 15px; text-align: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .header h1 { margin: 0; font-size: 20px; }
+        .version { font-size: 11px; color: #ecf0f1; margin-top: 3px; }
+        .container { padding: 15px; padding-bottom: 30px; }
+        .card { background: white; border-radius: 12px; padding: 18px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .card h2 { margin-top: 0; font-size: 16px; color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 8px; margin-bottom: 12px;}
+        
+        input, textarea { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; box-sizing: border-box; background-color: #fafafa; }
+        input:focus, textarea:focus { outline: none; border-color: #2980b9; background-color: #fff; }
+        textarea { height: 80px; resize: none; }
+        
+        .btn { width: 100%; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-bottom: 10px; transition: 0.2s; }
+        .btn:active { transform: scale(0.98); opacity: 0.9; }
+        .btn-ai { background-color: #8e44ad; display: flex; align-items: center; justify-content: center; gap: 8px;}
+        .btn-speak { background-color: #27ae60; }
+        .btn-mic { background-color: #e74c3c; }
+        
+        .result-display { font-size: 22px; line-height: 2.5; padding: 15px; background: #fffde7; border-radius: 8px; min-height: 80px; text-align: center; margin-bottom: 15px; border: 2px solid #f1c40f; }
+        ruby { ruby-position: over; margin: 0 2px; }
+        rt { font-size: 12px; color: #d35400; font-family: "Courier New", Courier, monospace;}
+        
+        .feedback { font-size: 14px; padding: 12px; background: #e8f8f5; border-radius: 8px; text-align: center; color: #16a085; font-weight: bold; border: 1px dashed #1abc9c;}
+        .loading { display: none; text-align: center; color: #8e44ad; font-size: 14px; margin-bottom: 10px; font-weight: bold;}
+        .saved-badge { font-size: 12px; color: #27ae60; display: none; margin-bottom: 10px; text-align: center; font-weight: bold;}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 港保通 AI 訓練台</h1>
+        <div class="version">Version: 4.1.0 | 安全記憶版</div>
+    </div>
+
+    <div class="container">
+        
+        <div class="card" style="background-color: #fdfefe; border-left: 4px solid #8e44ad;">
+            <h2 style="font-size: 14px; color: #7f8c8d; border:none; margin-bottom:5px;">🔑 1. API Key (手機安全儲存)</h2>
+            <input type="password" id="apiKey" placeholder="貼上你的 API Key (只需貼一次)">
+            <div id="savedBadge" class="saved-badge">✅ 已自動載入你之前儲存的 Key</div>
+        </div>
+
+        <div class="card">
+            <h2>💬 2. 輸入廣東話推銷話術</h2>
+            <textarea id="inputText" placeholder="例：呢份單供斷之後，啲錢可以滾存留俾下一代..."></textarea>
+            <button class="btn btn-ai" id="translateBtn" onclick="translateWithGemini()">✨ AI 智能翻譯並生成拼音</button>
+            <div class="loading" id="loadingText">🧠 Gemini 正在思考與翻譯中，請稍候...</div>
+        </div>
+
+        <div class="card">
+            <h2>🎓 3. 學習與評測</h2>
+            <div id="resultBox" class="result-display">AI 翻譯結果將顯示在這裡...</div>
+            <button class="btn btn-speak" onclick="playTranslation()">🔊 聽 AI 標準發音</button>
+            <button class="btn btn-mic" id="micBtn" onclick="startCorrection()">🎤 跟我讀一遍 (AI 收音校對)</button>
+            <div id="feedbackResult" class="feedback">發音校對結果...</div>
+        </div>
+
+    </div>
+
+    <script>
+        const { pinyin } = pinyinPro;
+        let currentTranslatedText = "";
+
+        // 頁面載入時，自動從手機讀取之前存好的 API Key
+        document.addEventListener("DOMContentLoaded", () => {
+            const savedKey = localStorage.getItem('gemini_api_key');
+            if (savedKey) {
+                document.getElementById('apiKey').value = savedKey;
+                document.getElementById('savedBadge').style.display = 'block';
+            }
+        });
+
+        async function translateWithGemini() {
+            const apiKeyInput = document.getElementById('apiKey').value.trim();
+            const inputText = document.getElementById('inputText').value.trim();
+            const resultBox = document.getElementById('resultBox');
+            const loadingText = document.getElementById('loadingText');
+            const translateBtn = document.getElementById('translateBtn');
+
+            if (!apiKeyInput) return alert("請先在上方貼上你的 Gemini API Key！");
+            if (!inputText) return alert("請輸入需要翻譯的廣東話！");
+
+            // 成功獲取 Key 後，安全地儲存在手機本地
+            localStorage.setItem('gemini_api_key', apiKeyInput);
+            document.getElementById('savedBadge').style.display = 'block';
+
+            loadingText.style.display = "block";
+            translateBtn.disabled = true;
+            translateBtn.style.opacity = "0.6";
+            resultBox.innerHTML = "";
+
+            const prompt = `你是一個專業的普通話保險教練。請將以下【香港粵語/口語】翻譯成【最地道、具親和力、專業的內地保險普通話書面語】。
+            規則：
+            1. 替換掉所有香港專用語（如：危疾改為重疾，供斷改為交清，理賠改為理賠等）。
+            2. 語氣要專業得體，適合面對內地高淨值客戶。
+            3. 絕對只輸出翻譯後的純文字，不要加任何解釋、引號或標點符號外的內容。
+            需要翻譯的文字：\n${inputText}`;
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKeyInput}`;
+            const requestBody = { contents: [{ parts: [{ text: prompt }] }] };
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) throw new Error("API 請求失敗，請檢查 API Key 是否正確。");
+
+                const data = await response.json();
+                currentTranslatedText = data.candidates[0].content.parts[0].text.trim();
+
+                const htmlResult = pinyin(currentTranslatedText, { type: 'string', type: 'html' });
+                resultBox.innerHTML = htmlResult;
+
+            } catch (error) {
+                alert("發生錯誤：" + error.message);
+                resultBox.innerHTML = "翻譯失敗，請檢查網絡或 API Key。";
+            } finally {
+                loadingText.style.display = "none";
+                translateBtn.disabled = false;
+                translateBtn.style.opacity = "1";
+            }
+        }
+
+        function playTranslation() {
+            if(!currentTranslatedText) return alert("請先進行翻譯！");
+            const utterance = new SpeechSynthesisUtterance(currentTranslatedText);
+            utterance.lang = 'zh-CN';
+            utterance.rate = 0.85; 
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function startCorrection() {
+            if (!currentTranslatedText) return alert("請先進行翻譯！");
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                return alert("你的瀏覽器不支持語音識別，請使用 Chrome 瀏覽器。");
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const recognition = new SpeechRecognition();
+            recognition.lang = "zh-CN";
+            
+            const micBtn = document.getElementById('micBtn');
+            const feedbackResult = document.getElementById('feedbackResult');
+
+            recognition.onstart = () => {
+                micBtn.innerHTML = "🔴 正在聆聽，請對著手機朗讀...";
+                micBtn.style.backgroundColor = "#c0392b";
+                feedbackResult.innerHTML = "等待發音...";
+            };
+
+            recognition.onresult = (event) => {
+                const userSpeech = event.results[0][0].transcript;
+                const cleanUserSpeech = userSpeech.replace(/[.,!?，。！？]/g, '');
+                const cleanTargetText = currentTranslatedText.replace(/[.,!?，。！？]/g, '');
+
+                let feedbackHtml = `系統聽到你說：<br><span style="color:#e67e22; font-size:16px;">${userSpeech}</span><br><br>`;
+                
+                if (cleanUserSpeech === cleanTargetText) {
+                    feedbackHtml += "✅ <span style='color:#27ae60;'>太棒了！你的發音和字詞完全精準！</span>";
+                } else {
+                    feedbackHtml += "❌ <span style='color:#e74c3c;'>有幾個字音可能不太準確，或者讀漏了，請點擊「聽標準發音」再試一次！</span>";
+                }
+                
+                feedbackResult.innerHTML = feedbackHtml;
+                resetMicBtn();
+            };
+
+            recognition.onerror = () => {
+                feedbackResult.innerHTML = "收音失敗，請允許麥克風權限或再大聲點試試。";
+                resetMicBtn();
+            };
+
+            recognition.start();
+
+            function resetMicBtn() {
+                micBtn.innerHTML = "🎤 跟我讀一遍 (AI 收音校對)";
+                micBtn.style.backgroundColor = "#e74c3c";
+            }
+        }
+    </script>
+</body>
+</html>
