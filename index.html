@@ -3,6 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
     <title>港保通 - 普通話營銷教練</title>
     
     <link rel="manifest" href="./manifest.json">
@@ -27,7 +32,6 @@
         .btn-speak { background-color: #27ae60; }
         .btn-mic { background-color: #e74c3c; }
         
-        /* 拼音與中文字顯示區 (完美上下對齊) */
         .result-display { font-size: 22px; line-height: 2.5; padding: 15px; background: #fffde7; border-radius: 8px; min-height: 80px; text-align: center; margin-bottom: 15px; border: 2px solid #f1c40f; }
         ruby { ruby-position: over; margin: 0 2px; font-weight: bold; color: #2c3e50; }
         rt { font-size: 13px; color: #d35400; font-family: Arial, sans-serif; font-weight: normal; }
@@ -40,7 +44,7 @@
 <body>
     <div class="header">
         <h1>🚀 港保通 AI 訓練台</h1>
-        <div class="version">Version: 4.2.0 | 終極 Android 實戰版</div>
+        <div class="version" id="appVersion">Version: 4.4.0 | 單檔智能更新版</div>
     </div>
 
     <div class="container">
@@ -61,7 +65,6 @@
         <div class="card">
             <h2>🎓 3. 實戰訓練</h2>
             <div id="resultBox" class="result-display">AI 翻譯結果將顯示在這裡...</div>
-            
             <button class="btn btn-speak" onclick="playTranslation()">🔊 聽老師標準發音</button>
             <button class="btn btn-mic" id="micBtn" onclick="startCorrection()">🎤 跟我讀一遍 (收音校對)</button>
             <div id="feedbackResult" class="feedback">發音校對結果...</div>
@@ -70,7 +73,14 @@
     </div>
 
     <script>
-        // 註冊 Service Worker (PWA 必備，但不需要離線快取)
+        // ----------------------------------------------------
+        // 🚀 自動清理快取機制 (確保手機唔會食死舊代碼)
+        // ----------------------------------------------------
+        if ('caches' in window) {
+            caches.keys().then(function(names) {
+                for (let name of names) caches.delete(name);
+            });
+        }
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW 註冊失敗', err));
         }
@@ -78,7 +88,6 @@
         const { pinyin } = pinyinPro;
         let currentTranslatedText = "";
 
-        // 頁面載入時，自動從手機讀取 API Key
         document.addEventListener("DOMContentLoaded", () => {
             const savedKey = localStorage.getItem('gemini_api_key');
             if (savedKey) {
@@ -95,14 +104,12 @@
             const loadingText = document.getElementById('loadingText');
             const translateBtn = document.getElementById('translateBtn');
 
-            if (!apiKeyInput) return alert("請先在上方貼上你的 Gemini API Key！");
+            if (!apiKeyInput) return alert("請先在上方貼上你的 API Key！");
             if (!inputText) return alert("請輸入需要翻譯的廣東話！");
 
-            // 儲存 API Key 落手機
             localStorage.setItem('gemini_api_key', apiKeyInput);
             document.getElementById('savedBadge').style.display = 'block';
 
-            // UI 狀態：載入中
             loadingText.style.display = "block";
             translateBtn.disabled = true;
             translateBtn.style.opacity = "0.6";
@@ -115,7 +122,10 @@
             3. 絕對只輸出翻譯後的純文字，不要加任何解釋、引號或標點符號外的內容。
             需要翻譯的文字：\n${inputText}`;
 
+            // ⚠️ 記得將下面呢條網址換成你喺 Cloudflare 建立嘅中轉站！
+            // 例子：https://gemini-proxy.yourname.workers.dev/v1beta/...
             const url = `https://chinese-proxy.wahchiu0903.workers.dev/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKeyInput}`;
+            
             const requestBody = { contents: [{ parts: [{ text: prompt }] }] };
 
             try {
@@ -125,21 +135,18 @@
                     body: JSON.stringify(requestBody)
                 });
 
-                if (!response.ok) throw new Error("API 請求失敗，請檢查 API Key 是否正確。");
+                if (!response.ok) throw new Error("API 請求失敗，請檢查 API Key 或中轉站網址是否正確。");
 
                 const data = await response.json();
                 currentTranslatedText = data.candidates[0].content.parts[0].text.trim();
 
-                // 🛠️ 100% 準確的中文字+拼音渲染邏輯
                 let htmlResult = '';
                 for(let i = 0; i < currentTranslatedText.length; i++) {
                     const char = currentTranslatedText[i];
-                    // 判斷：如果係中文字，就幫佢加拼音頂帽
                     if (/[\u4e00-\u9fa5]/.test(char)) {
                         const py = pinyin(char, { type: 'string' });
                         htmlResult += `<ruby>${char}<rt>${py}</rt></ruby>`;
                     } else {
-                        // 如果係標點符號或者數字，直接顯示
                         htmlResult += char;
                     }
                 }
@@ -156,16 +163,16 @@
             }
         }
 
-        // 語音朗讀功能
+        // 語音朗讀
         function playTranslation() {
             if(!currentTranslatedText) return alert("請先進行翻譯！");
             const utterance = new SpeechSynthesisUtterance(currentTranslatedText);
-            utterance.lang = 'zh-CN'; // 設定為內地普通話口音
-            utterance.rate = 0.85;    // 稍微放慢語速，方便學習
+            utterance.lang = 'zh-CN'; 
+            utterance.rate = 0.85;    
             window.speechSynthesis.speak(utterance);
         }
 
-        // 語音識別與糾音功能
+        // 語音識別與糾音
         function startCorrection() {
             if (!currentTranslatedText) return alert("請先進行翻譯，有了目標句子才能校對！");
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -188,7 +195,6 @@
             recognition.onresult = (event) => {
                 const userSpeech = event.results[0][0].transcript;
                 
-                // 為了準確比對，去除雙方的標點符號和空格
                 const cleanUserSpeech = userSpeech.replace(/[.,!?，。！？\s]/g, '');
                 const cleanTargetText = currentTranslatedText.replace(/[.,!?，。！？\s]/g, '');
 
@@ -219,3 +225,4 @@
     </script>
 </body>
 </html>
+=
