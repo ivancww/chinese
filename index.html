@@ -44,14 +44,14 @@
 <body>
     <div class="header">
         <h1>🚀 港保通 AI 訓練台</h1>
-        <div class="version" id="appVersion">Version: 4.4.0 | 單檔智能更新版</div>
+        <div class="version" id="appVersion">Version: 4.5.0 | Gemini 2.5 專屬中轉版</div>
     </div>
 
     <div class="container">
         
         <div class="card" style="border-left: 4px solid #8e44ad;">
             <h2 style="font-size: 14px; color: #7f8c8d; border:none; margin-bottom:5px;">🔑 1. API Key (手機安全儲存)</h2>
-            <input type="password" id="apiKey" placeholder="貼上你的 Gemini API Key (只需貼一次)">
+            <input type="text" id="apiKey" placeholder="貼上你的 Gemini API Key (只需貼一次)">
             <div id="savedBadge" class="saved-badge">✅ 已自動載入你之前儲存的 Key</div>
         </div>
 
@@ -73,9 +73,7 @@
     </div>
 
     <script>
-        // ----------------------------------------------------
-        // 🚀 自動清理快取機制 (確保手機唔會食死舊代碼)
-        // ----------------------------------------------------
+        // 自動清理快取機制
         if ('caches' in window) {
             caches.keys().then(function(names) {
                 for (let name of names) caches.delete(name);
@@ -88,6 +86,7 @@
         const { pinyin } = pinyinPro;
         let currentTranslatedText = "";
 
+        // 頁面載入時，自動從手機讀取 API Key
         document.addEventListener("DOMContentLoaded", () => {
             const savedKey = localStorage.getItem('gemini_api_key');
             if (savedKey) {
@@ -104,9 +103,10 @@
             const loadingText = document.getElementById('loadingText');
             const translateBtn = document.getElementById('translateBtn');
 
-            if (!apiKeyInput) return alert("請先在上方貼上你的 API Key！");
+            if (!apiKeyInput) return alert("請先在上方貼上你的 Gemini API Key！");
             if (!inputText) return alert("請輸入需要翻譯的廣東話！");
 
+            // 儲存 API Key 落手機
             localStorage.setItem('gemini_api_key', apiKeyInput);
             document.getElementById('savedBadge').style.display = 'block';
 
@@ -122,9 +122,8 @@
             3. 絕對只輸出翻譯後的純文字，不要加任何解釋、引號或標點符號外的內容。
             需要翻譯的文字：\n${inputText}`;
 
-            // ⚠️ 記得將下面呢條網址換成你喺 Cloudflare 建立嘅中轉站！
-            // 例子：https://gemini-proxy.yourname.workers.dev/v1beta/...
-            const url = `https://chinese-proxy.wahchiu0903.workers.dev/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKeyInput}`;
+            // 🚀 終極結合：你專屬嘅 Cloudflare 中轉站 + 最新嘅 Gemini 2.5 Flash 模型！
+            const url = `https://chinese-proxy.wahchiu0903.workers.dev/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKeyInput}`;
             
             const requestBody = { contents: [{ parts: [{ text: prompt }] }] };
 
@@ -135,7 +134,7 @@
                     body: JSON.stringify(requestBody)
                 });
 
-                if (!response.ok) throw new Error("API 請求失敗，請檢查 API Key 或中轉站網址是否正確。");
+                if (!response.ok) throw new Error("API 請求失敗，請檢查 API Key 是否正確，或 Cloudflare 中轉站是否正常運作。");
 
                 const data = await response.json();
                 currentTranslatedText = data.candidates[0].content.parts[0].text.trim();
@@ -225,4 +224,3 @@
     </script>
 </body>
 </html>
-=
