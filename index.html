@@ -115,7 +115,7 @@
             3. 絕對只輸出翻譯後的純文字，不要加任何解釋、引號或標點符號外的內容。
             需要翻譯的文字：\n${inputText}`;
 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKeyInput}`;
+            const url = `https://chinese-proxy.wahchiu0903.workers.dev/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKeyInput}`;
             const requestBody = { contents: [{ parts: [{ text: prompt }] }] };
 
             try {
