@@ -26,11 +26,19 @@
         input:focus, textarea:focus { outline: none; border-color: #2980b9; background-color: #fff; }
         textarea { height: 80px; resize: none; }
         
-        .btn { width: 100%; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-bottom: 10px; transition: 0.2s; }
-        .btn:active { transform: scale(0.98); opacity: 0.9; }
-        .btn-ai { background-color: #8e44ad; }
+        .btn { color: white; border: none; padding: 12px; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; transition: 0.2s; text-align: center; }
+        .btn:active { transform: scale(0.95); opacity: 0.9; }
+        .btn-ai { background-color: #8e44ad; width: 100%; margin-bottom: 10px; padding: 14px;}
+        
+        /* 播放控制列排版 */
+        .controls-row { display: flex; gap: 8px; margin-bottom: 12px; }
+        .controls-row .btn { flex: 1; padding: 12px 5px; font-size: 14px; }
+        
         .btn-speak { background-color: #27ae60; }
         .btn-mic { background-color: #e74c3c; }
+        .btn-pause { background-color: #f39c12; }
+        .btn-resume { background-color: #2980b9; }
+        .btn-finish { background-color: #16a085; }
         
         .result-display { font-size: 22px; line-height: 2.5; padding: 15px; background: #fffde7; border-radius: 8px; min-height: 80px; text-align: center; margin-bottom: 15px; border: 2px solid #f1c40f; }
         ruby { ruby-position: over; margin: 0 2px; font-weight: bold; color: #2c3e50; }
@@ -44,14 +52,14 @@
 <body>
     <div class="header">
         <h1>🚀 港保通 AI 訓練台</h1>
-        <div class="version" id="appVersion">Version: 4.6.0 | Gemini 2.5 專屬中轉版</div>
+        <div class="version" id="appVersion">Version: 5.1.0 | Gemini 2.5 + 語音控制版</div>
     </div>
 
     <div class="container">
         
         <div class="card" style="border-left: 4px solid #8e44ad;">
-            <h2 style="font-size: 14px; color: #7f8c8d; border:none; margin-bottom:5px;">🔑 1. API Key (手機安全儲存)</h2>
-            <input type="text" id="apiKey" placeholder="貼上你的 Gemini API Key (只需貼一次)">
+            <h2 style="font-size: 14px; color: #7f8c8d; border:none; margin-bottom:5px;">🔑 1. API Key (明碼顯示，方便核對)</h2>
+            <input type="text" id="apiKey" placeholder="貼上你的 Gemini API Key (例如 AIzaSy...)">
             <div id="savedBadge" class="saved-badge">✅ 已自動載入你之前儲存的 Key</div>
         </div>
 
@@ -63,39 +71,68 @@
         </div>
 
         <div class="card">
-            <h2>🎓 3. 實戰訓練</h2>
+            <h2>🎓 3. 實戰訓練 (可暫停/繼續)</h2>
             <div id="resultBox" class="result-display">AI 翻譯結果將顯示在這裡...</div>
-            <button class="btn btn-speak" onclick="playTranslation()">🔊 聽老師標準發音</button>
-            <button class="btn btn-mic" id="micBtn" onclick="startCorrection()">🎤 跟我讀一遍 (收音校對)</button>
+            
+            <div style="font-size: 13px; color: #7f8c8d; margin-bottom: 5px;">🔊 聽標準發音：</div>
+            <div class="controls-row">
+                <button class="btn btn-speak" onclick="playTranslation()">▶️ 由頭播</button>
+                <button class="btn btn-pause" onclick="pauseTranslation()">⏸️ 暫停</button>
+                <button class="btn btn-resume" onclick="resumeTranslation()">⏯️ 繼續播</button>
+            </div>
+
+            <div style="font-size: 13px; color: #7f8c8d; margin-bottom: 5px; margin-top: 15px;">🎤 跟我讀一遍 (收音校對)：</div>
+            <div class="controls-row">
+                <button class="btn btn-mic" id="micBtn" onclick="startCorrection()">🔴 開始錄</button>
+                <button class="btn btn-pause" onclick="pauseCorrection()">⏸️ 暫停錄</button>
+                <button class="btn btn-finish" onclick="finishCorrection()">✅ 讀完校對</button>
+            </div>
+            
             <div id="feedbackResult" class="feedback">發音校對結果...</div>
         </div>
 
     </div>
 
     <script>
-        // 自動清理快取機制
-        if ('caches' in window) {
-            caches.keys().then(function(names) {
-                for (let name of names) caches.delete(name);
-            });
-        }
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW 註冊失敗', err));
-        }
-
         const { pinyin } = pinyinPro;
         let currentTranslatedText = "";
 
-        // 頁面載入時，自動從手機讀取 API Key
+        // === 語音識別全域變數 ===
+        let recognition = null;
+        let accumulatedSpeech = ""; // 用嚟儲存暫停前後加埋嘅錄音
+        let isRecording = false;
+
         document.addEventListener("DOMContentLoaded", () => {
             const savedKey = localStorage.getItem('gemini_api_key');
             if (savedKey) {
                 document.getElementById('apiKey').value = savedKey;
                 document.getElementById('savedBadge').style.display = 'block';
             }
+            
+            // 初始化語音識別引擎
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                recognition.lang = "zh-CN"; // 普通話
+                recognition.continuous = true; // 允許連續錄音 (方便暫停)
+                recognition.interimResults = false;
+
+                recognition.onresult = (event) => {
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        accumulatedSpeech += event.results[i][0].transcript;
+                    }
+                    document.getElementById('feedbackResult').innerHTML = "🗣️ 暫時錄到：<br>" + accumulatedSpeech;
+                };
+
+                recognition.onerror = (event) => {
+                    console.log("收音錯誤", event.error);
+                };
+            }
         });
 
-        // 核心功能：呼叫 Gemini 翻譯 + 生成拼音
+        // ==========================================
+        // 核心功能：呼叫 Gemini 翻譯 + 拼音
+        // ==========================================
         async function translateWithGemini() {
             const apiKeyInput = document.getElementById('apiKey').value.trim();
             const inputText = document.getElementById('inputText').value.trim();
@@ -103,26 +140,19 @@
             const loadingText = document.getElementById('loadingText');
             const translateBtn = document.getElementById('translateBtn');
 
-            if (!apiKeyInput) return alert("請先在上方貼上你的 Gemini API Key！");
-            if (!inputText) return alert("請輸入需要翻譯的廣東話！");
+            if (!apiKeyInput) return alert("請貼上 API Key！");
+            if (!inputText) return alert("請輸入廣東話！");
 
-            // 儲存 API Key 落手機
             localStorage.setItem('gemini_api_key', apiKeyInput);
             document.getElementById('savedBadge').style.display = 'block';
 
             loadingText.style.display = "block";
             translateBtn.disabled = true;
-            translateBtn.style.opacity = "0.6";
             resultBox.innerHTML = "";
 
-            const prompt = `你是一個專業的普通話保險教練。請將以下【香港粵語/口語】翻譯成【最地道、具親和力、專業的內地保險普通話書面語】。
-            規則：
-            1. 替換掉所有香港專用語（如：危疾改為重疾，供斷改為交清，理賠改為理賠等）。
-            2. 語氣要專業得體，適合面對內地高淨值客戶。
-            3. 絕對只輸出翻譯後的純文字，不要加任何解釋、引號或標點符號外的內容。
-            需要翻譯的文字：\n${inputText}`;
+            const prompt = `你是一個專業的普通話保險教練。請將以下【香港粵語/口語】翻譯成【最地道、具親和力、專業的內地保險普通話書面語】。替換掉所有香港專用語，只輸出翻譯後的純文字。\n需要翻譯的文字：\n${inputText}`;
 
-            // 🚀 終極結合：你專屬嘅 Cloudflare 中轉站 + 最新嘅 Gemini 2.5 Flash 模型！
+            // 🚀 正式升級：Gemini 2.5 Flash + Cloudflare 中轉站
             const url = `https://chinese-proxy.wahchiu0903.workers.dev/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKeyInput}`;
             
             const requestBody = { contents: [{ parts: [{ text: prompt }] }] };
@@ -134,7 +164,7 @@
                     body: JSON.stringify(requestBody)
                 });
 
-                if (!response.ok) throw new Error("API 請求失敗，請檢查 API Key 是否正確，或 Cloudflare 中轉站是否正常運作。");
+                if (!response.ok) throw new Error("網絡請求失敗");
 
                 const data = await response.json();
                 currentTranslatedText = data.candidates[0].content.parts[0].text.trim();
@@ -149,77 +179,81 @@
                         htmlResult += char;
                     }
                 }
-                
                 resultBox.innerHTML = htmlResult;
 
             } catch (error) {
-                alert("發生錯誤：" + error.message);
-                resultBox.innerHTML = "翻譯失敗，請檢查網絡或 API Key。";
+                resultBox.innerHTML = "❌ 翻譯失敗。請確保 Cloudflare Worker 內已設定正確的 AI Gateway。";
             } finally {
                 loadingText.style.display = "none";
                 translateBtn.disabled = false;
-                translateBtn.style.opacity = "1";
             }
         }
 
-        // 語音朗讀
+        // ==========================================
+        // 語音朗讀 (Text-to-Speech) 功能區
+        // ==========================================
         function playTranslation() {
-            if(!currentTranslatedText) return alert("請先進行翻譯！");
+            if(!currentTranslatedText) return alert("請先翻譯！");
+            window.speechSynthesis.cancel(); // 停曬之前未播完嘅
             const utterance = new SpeechSynthesisUtterance(currentTranslatedText);
             utterance.lang = 'zh-CN'; 
             utterance.rate = 0.85;    
             window.speechSynthesis.speak(utterance);
         }
 
-        // 語音識別與糾音
+        function pauseTranslation() {
+            window.speechSynthesis.pause();
+        }
+
+        function resumeTranslation() {
+            window.speechSynthesis.resume();
+        }
+
+        // ==========================================
+        // 收音校對 (Speech-to-Text) 功能區
+        // ==========================================
         function startCorrection() {
-            if (!currentTranslatedText) return alert("請先進行翻譯，有了目標句子才能校對！");
-            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                return alert("你的瀏覽器不支持語音識別，請使用 Chrome 瀏覽器。");
-            }
-
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            const recognition = new SpeechRecognition();
-            recognition.lang = "zh-CN";
+            if (!currentTranslatedText) return alert("請先進行翻譯！");
+            if (!recognition) return alert("你的瀏覽器不支持語音識別。");
             
-            const micBtn = document.getElementById('micBtn');
-            const feedbackResult = document.getElementById('feedbackResult');
-
-            recognition.onstart = () => {
-                micBtn.innerHTML = "🔴 正在聆聽，請對著手機朗讀...";
-                micBtn.style.backgroundColor = "#c0392b";
-                feedbackResult.innerHTML = "等待發音...";
-            };
-
-            recognition.onresult = (event) => {
-                const userSpeech = event.results[0][0].transcript;
-                
-                const cleanUserSpeech = userSpeech.replace(/[.,!?，。！？\s]/g, '');
-                const cleanTargetText = currentTranslatedText.replace(/[.,!?，。！？\s]/g, '');
-
-                let feedbackHtml = `系統聽到你說：<br><span style="color:#e67e22; font-size:16px;">${userSpeech}</span><br><br>`;
-                
-                if (cleanUserSpeech === cleanTargetText) {
-                    feedbackHtml += "✅ <span style='color:#27ae60;'>太棒了！你的發音和字詞完全精準！</span>";
-                } else {
-                    feedbackHtml += "❌ <span style='color:#e74c3c;'>有幾個字音可能不太準確，或者讀漏了，請點擊「聽標準發音」再試一次！</span>";
-                }
-                
-                feedbackResult.innerHTML = feedbackHtml;
-                resetMicBtn();
-            };
-
-            recognition.onerror = () => {
-                feedbackResult.innerHTML = "收音失敗，請允許麥克風權限或再大聲點試試。";
-                resetMicBtn();
-            };
-
+            accumulatedSpeech = ""; // 每次由頭開始錄，清空記憶
+            document.getElementById('feedbackResult').innerHTML = "🔴 正在聆聽，請對著手機朗讀...";
             recognition.start();
+            isRecording = true;
+            document.getElementById('micBtn').innerHTML = "🎙️ 錄音中...";
+        }
 
-            function resetMicBtn() {
-                micBtn.innerHTML = "🎤 跟我讀一遍 (收音校對)";
-                micBtn.style.backgroundColor = "#e74c3c";
+        function pauseCorrection() {
+            if(isRecording && recognition) {
+                recognition.stop();
+                isRecording = false;
+                document.getElementById('micBtn').innerHTML = "🔴 重新由頭錄";
+                document.getElementById('feedbackResult').innerHTML += "<br><span style='color:#f39c12'>⏸️ 已暫停錄音 (可以點擊 ✅ 讀完校對，或者由頭再錄)</span>";
             }
+        }
+
+        function finishCorrection() {
+            if(recognition) {
+                recognition.stop();
+                isRecording = false;
+                document.getElementById('micBtn').innerHTML = "🔴 開始錄";
+            }
+            
+            if(!accumulatedSpeech) {
+                return document.getElementById('feedbackResult').innerHTML = "⚠️ 聽唔到你把聲，請試下講大聲啲！";
+            }
+
+            const cleanUserSpeech = accumulatedSpeech.replace(/[.,!?，。！？\s]/g, '');
+            const cleanTargetText = currentTranslatedText.replace(/[.,!?，。！？\s]/g, '');
+
+            let feedbackHtml = `系統聽到你說：<br><span style="color:#e67e22; font-size:16px;">${accumulatedSpeech}</span><br><br>`;
+            
+            if (cleanUserSpeech === cleanTargetText) {
+                feedbackHtml += "✅ <span style='color:#27ae60;'>太棒了！你的發音和字詞完全精準！</span>";
+            } else {
+                feedbackHtml += "❌ <span style='color:#e74c3c;'>有幾個字音可能不太準確，或者讀漏了，請點擊「聽標準發音」再試一次！</span>";
+            }
+            document.getElementById('feedbackResult').innerHTML = feedbackHtml;
         }
     </script>
 </body>
